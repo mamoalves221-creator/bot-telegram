@@ -13,9 +13,19 @@ def pipe(src, dst):
 
 def handle(client):
     try:
-        # AQUI ESTÁ O SEGREDO: Ignoramos qualquer handshake e conectamos direto ao destino
+        # SOCKS5 Handshake simples
+        client.recv(4096)
+        client.send(b"\x05\x00") # Resposta: Versão 5, Sem autenticação
+        
+        # Lê o pedido de conexão
+        data = client.recv(4096)
+        # Resposta: SOCKS5 sucesso
+        client.send(b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00")
+        
+        # Conecta ao destino
         target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         target.connect(("www.facebook.com", 443))
+        
         threading.Thread(target=pipe, args=(client, target)).start()
         pipe(target, client)
     except: client.close()
