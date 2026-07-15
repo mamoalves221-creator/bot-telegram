@@ -1,39 +1,22 @@
-import socket, threading, os
+from flask import Flask, request, Response
+import requests
+import os
 
-def pipe(src, dst):
-    try:
-        while True:
-            data = src.recv(4096)
-            if not data: break
-            dst.send(data)
-    except: pass
-    finally:
-        src.close()
-        dst.close()
+app = Flask(__name__)
 
-def handle(client):
-    try:
-        # SOCKS5 Handshake simples
-        client.recv(4096)
-        client.send(b"\x05\x00") # Resposta: Versão 5, Sem autenticação
-        
-        # Lê o pedido de conexão
-        data = client.recv(4096)
-        # Resposta: SOCKS5 sucesso
-        client.send(b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00")
-        
-        # Conecta ao destino
-        target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        target.connect(("www.facebook.com", 443))
-        
-        threading.Thread(target=pipe, args=(client, target)).start()
-        pipe(target, client)
-    except: client.close()
+@app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE'])
+@app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def proxy(path):
+    url = f"https://www.facebook.com/{path}"
+    resp = requests.request(
+        method=request.method,
+        url=url,
+        headers={key: value for (key, value) in request.headers if key != 'Host'},
+        data=request.get_data(),
+        cookies=request.cookies,
+        allow_redirects=False
+    )
+    return Response(resp.content, resp.status_code, dict(resp.headers))
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind(("0.0.0.0", int(os.environ.get("PORT", 8080))))
-server.listen(5)
-
-while True:
-    client, _ = server.accept()
-    threading.Thread(target=handle, args=(client,)).start()
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
